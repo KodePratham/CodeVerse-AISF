@@ -54,27 +54,58 @@ export async function POST(
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const results = []
 
-    // Process each sheet
+    // Process each sheet - simple cleaning only
     for (const sheetName of workbook.SheetNames) {
       const worksheet = workbook.Sheets[sheetName]
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null })
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: null })
       
-      if (jsonData.length > 0) {
-        const sheet = await excelService.saveExcelData(
-          params.roomId,
-          file.name,
-          sheetName,
-          jsonData,
-          user.id
-        )
-        results.push(sheet)
+      if (rawData.length > 0) {
+        // Simple data cleaning - remove empty rows
+        const cleanedData = rawData
+          .map(row => {
+            const cleanRow: any = {}
+            let hasData = false
+            
+            Object.entries(row as Record<string, any>).forEach(([key, value]) => {
+              if (value !== null && value !== undefined && value !== '') {
+                cleanRow[key] = typeof value === 'string' ? value.trim() : value
+                hasData = true
+              }
+            })
+            
+            return hasData ? cleanRow : null
+          })
+          .filter(row => row !== null)
+        
+        if (cleanedData.length > 0) {
+          // Save cleaned data to database
+          const sheet = await excelService.saveExcelData(
+            params.roomId,
+            file.name,
+            sheetName,
+            cleanedData,
+            user.id
+          )
+          
+          results.push(sheet)
+          console.log(`Saved ${cleanedData.length} rows from sheet "${sheetName}"`)
+        } else {
+          console.warn(`No valid data found in sheet "${sheetName}"`)
+        }
       }
+    }
+
+    if (results.length === 0) {
+      return NextResponse.json({ 
+        error: 'No valid data found in the uploaded file' 
+      }, { status: 400 })
     }
 
     return NextResponse.json({ 
       success: true, 
       sheets: results,
-      message: `Successfully processed ${results.length} sheet(s)` 
+      message: `Successfully processed ${results.length} sheet(s)`,
+      totalRowsProcessed: results.reduce((sum, sheet) => sum + sheet.row_count, 0)
     }, { status: 200 })
 
   } catch (error: any) {

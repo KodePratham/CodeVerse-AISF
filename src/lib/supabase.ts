@@ -63,19 +63,12 @@ export interface ExcelSheet {
   uploaded_by_user_id: string
   file_name: string
   sheet_name: string
+  sheet_data: any[]
   upload_date: string
   row_count: number
   column_count: number
   created_at: string
   updated_at: string
-}
-
-export interface ExcelData {
-  id: string
-  sheet_id: string
-  row_index: number
-  data: any
-  created_at: string
 }
 
 export interface MasterWorkflow {
@@ -390,7 +383,7 @@ export const excelService = {
     // Ensure user exists and get their Supabase ID
     const userId = await userService.getSupabaseUserId(clerkUserId)
 
-    // Create excel_sheet record
+    // Create excel_sheet record with all data in sheet_data column
     const { data: sheet, error: sheetError } = await supabase
       .from('excel_sheets')
       .insert([{
@@ -398,8 +391,10 @@ export const excelService = {
         uploaded_by_user_id: userId,
         file_name: fileName,
         sheet_name: sheetName,
+        sheet_data: data,
         row_count: data.length,
-        column_count: data.length > 0 ? Object.keys(data[0]).length : 0
+        column_count: data.length > 0 ? Object.keys(data[0]).length : 0,
+        upload_date: new Date().toISOString()
       }])
       .select()
       .single()
@@ -407,25 +402,6 @@ export const excelService = {
     if (sheetError) {
       console.error('Error creating excel sheet:', sheetError)
       throw sheetError
-    }
-
-    // Insert data rows in batches
-    const batchSize = 1000
-    for (let i = 0; i < data.length; i += batchSize) {
-      const batch = data.slice(i, i + batchSize).map((row, index) => ({
-        sheet_id: sheet.id,
-        row_index: i + index,
-        data: row
-      }))
-
-      const { error: dataError } = await supabase
-        .from('excel_data')
-        .insert(batch)
-
-      if (dataError) {
-        console.error('Error inserting excel data:', dataError)
-        throw dataError
-      }
     }
 
     return sheet
@@ -457,17 +433,17 @@ export const excelService = {
     if (!supabase) throw new Error('Supabase not configured')
 
     const { data, error } = await supabase
-      .from('excel_data')
-      .select('*')
-      .eq('sheet_id', sheetId)
-      .order('row_index', { ascending: true })
+      .from('excel_sheets')
+      .select('sheet_data')
+      .eq('id', sheetId)
+      .single()
 
     if (error) {
       console.error('Error fetching excel data:', error)
       throw error
     }
 
-    return data
+    return data.sheet_data || []
   }
 }
 
@@ -496,7 +472,7 @@ export const masterWorkflowService = {
       throw new Error('You must be a member of this room to create master workflows')
     }
 
-    // Get all Excel data from the room
+    // Get all Excel data from the room (now from sheet_data column)
     const { data: allExcelData, error: dataError } = await supabase
       .from('excel_sheets')
       .select(`
@@ -505,7 +481,7 @@ export const masterWorkflowService = {
         sheet_name,
         row_count,
         column_count,
-        excel_data(row_index, data)
+        sheet_data
       `)
       .eq('room_id', roomId)
       .order('created_at', { ascending: true })
@@ -521,15 +497,13 @@ export const masterWorkflowService = {
 
     console.log(`Processing ${allExcelData.length} sheets for consolidation`)
 
-    // Prepare data for analysis
+    // Prepare data for analysis (now much simpler)
     const consolidatedData = allExcelData.map(sheet => ({
       fileName: sheet.file_name,
       sheetName: sheet.sheet_name,
       rowCount: sheet.row_count,
       columnCount: sheet.column_count,
-      data: (sheet.excel_data || [])
-        .sort((a: any, b: any) => a.row_index - b.row_index)
-        .map((row: any) => row.data)
+      data: sheet.sheet_data || []
     }))
 
     console.log('Consolidated data prepared, calling Gemini analysis...')
@@ -548,8 +522,8 @@ export const masterWorkflowService = {
           room_id: roomId,
           created_by_user_id: userId,
           workflow_name: `Master Workflow - ${new Date().toLocaleDateString()}`,
-          consolidated_data: JSON.stringify(consolidatedData),
-          gemini_analysis: JSON.stringify(geminiAnalysis),
+          consolidated_data: consolidatedData,
+          gemini_analysis: geminiAnalysis,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }])
