@@ -1,11 +1,48 @@
 import { UserButton, currentUser } from '@clerk/nextjs'
 import { redirect } from 'next/navigation'
+import { createServerSupabaseClient } from '@/lib/supabase'
 
 export default async function DashboardPage() {
   const user = await currentUser()
   
   if (!user) {
     redirect('/sign-in')
+  }
+
+  // Save/update user in Supabase
+  const supabase = createServerSupabaseClient()
+  
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('clerk_user_id', user.id)
+    .single()
+
+  if (!existingUser) {
+    // Create new user
+    await supabase
+      .from('users')
+      .insert([
+        {
+          clerk_user_id: user.id,
+          email: user.emailAddresses[0]?.emailAddress || '',
+          first_name: user.firstName,
+          last_name: user.lastName,
+          profile_image_url: user.profileImageUrl,
+        }
+      ])
+  } else {
+    // Update existing user
+    await supabase
+      .from('users')
+      .update({
+        email: user.emailAddresses[0]?.emailAddress || '',
+        first_name: user.firstName,
+        last_name: user.lastName,
+        profile_image_url: user.profileImageUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('clerk_user_id', user.id)
   }
 
   return (
@@ -31,8 +68,11 @@ export default async function DashboardPage() {
               <h2 className="text-2xl font-medium text-gray-900 mb-4">
                 Welcome to Colony Dashboard
               </h2>
-              <p className="text-gray-600">
+              <p className="text-gray-600 mb-4">
                 Your automated multi-sheet consolidation and reporting platform is ready to use.
+              </p>
+              <p className="text-sm text-gray-500">
+                User data synced with Supabase ✓
               </p>
             </div>
           </div>
