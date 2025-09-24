@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^4.29.1",
+    "@google/generative-ai": "^0.2.1",
     "@supabase/supabase-js": "^2.38.0",
     "@types/xlsx": "^0.0.36",
     "next": "14.0.3",
