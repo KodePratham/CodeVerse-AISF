@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { currentUser } from '@clerk/nextjs'
-import { roomService } from '@/lib/supabase'
+import { roomService, userService } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +16,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Valid 6-digit room code is required' }, { status: 400 })
     }
 
+    // Ensure user exists in Supabase first
+    try {
+      await userService.ensureUser(
+        user.id,
+        user.emailAddresses[0]?.emailAddress || '',
+        user.username || user.firstName || 'User',
+        user.profileImageUrl
+      )
+    } catch (userError) {
+      console.error('Error ensuring user exists:', userError)
+      return NextResponse.json({ error: 'User sync failed' }, { status: 500 })
+    }
+
     const room = await roomService.joinRoom(roomCode.trim(), user.id)
 
     return NextResponse.json({ room }, { status: 200 })
@@ -26,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid room code' }, { status: 404 })
     }
     
-    if (error.code === '23505') { // Unique constraint violation
+    if (error.message.includes('already a member')) {
       return NextResponse.json({ error: 'You are already a member of this room' }, { status: 409 })
     }
     

@@ -18,6 +18,13 @@ export default function ExcelUpload({ roomId }: ExcelUploadProps) {
     setIsUploading(true)
 
     try {
+      // First ensure user is synced
+      const syncResponse = await fetch('/api/users/sync', { method: 'POST' })
+      if (!syncResponse.ok) {
+        const syncData = await syncResponse.json()
+        throw new Error(`User sync failed: ${syncData.error}`)
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 

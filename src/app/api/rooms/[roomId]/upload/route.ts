@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { currentUser } from '@clerk/nextjs'
 import * as XLSX from 'xlsx'
-import { excelService } from '@/lib/supabase'
+import { excelService, userService } from '@/lib/supabase'
 
 export async function POST(
   request: NextRequest,
@@ -12,6 +12,19 @@ export async function POST(
     
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Ensure user is synced before proceeding
+    try {
+      await userService.ensureUser(
+        user.id,
+        user.emailAddresses[0]?.emailAddress || '',
+        user.username || user.firstName || 'User',
+        user.profileImageUrl
+      )
+    } catch (userError: any) {
+      console.error('Error ensuring user exists during upload:', userError)
+      return NextResponse.json({ error: 'User sync failed before upload' }, { status: 500 })
     }
 
     const formData = await request.formData()
@@ -67,7 +80,8 @@ export async function POST(
   } catch (error: any) {
     console.error('Error uploading Excel file:', error)
     return NextResponse.json({ 
-      error: error.message || 'Failed to upload Excel file' 
+      error: error.message || 'Failed to upload Excel file',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 })
   }
 }

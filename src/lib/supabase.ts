@@ -78,30 +78,153 @@ export interface ExcelData {
   created_at: string
 }
 
-// Room-related functions
-export const roomService = {
-  async createRoom(name: string, description?: string, clerkUserId?: string) {
+// Add user service for better user management
+export const userService = {
+  async ensureUser(clerkUserId: string, email: string, username?: string, profileImageUrl?: string) {
     const supabase = createServerSupabaseClient()
     if (!supabase) throw new Error('Supabase not configured')
 
-    // Get the user ID from Supabase users table
-    let userId = null
-    if (clerkUserId) {
+    try {
+      console.log('Ensuring user exists:', { clerkUserId, email, username })
+
+      // First try to get existing user
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('users')
+        .select('id, username, email')
+        .eq('clerk_user_id', clerkUserId)
+        .maybeSingle()
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error fetching user:', fetchError)
+        throw new Error(`Database query failed: ${fetchError.message}`)
+      }
+
+      if (existingUser) {
+        console.log('User already exists:', existingUser.id)
+        // Update user info if needed
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            email,
+            username: username || existingUser.username || 'User',
+            profile_image_url: profileImageUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq('clerk_user_id', clerkUserId)
+
+        if (updateError) {
+          console.warn('Failed to update user info:', updateError)
+          // Don't throw - existing user is still valid
+        }
+
+        return existingUser.id
+      }
+
+      // If user doesn't exist, create them
+      console.log('Creating new user...')
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert([{
+          clerk_user_id: clerkUserId,
+          email,
+          username: username || 'User',
+          profile_image_url: profileImageUrl,
+          subscription_tier: 'free', // Default subscription tier
+          storage_used_mb: 0, // Default storage used
+          storage_limit_mb: 100, // Default storage limit (100MB)
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select('id')
+        .single()
+
+      if (createError) {
+        console.error('Error creating user:', createError)
+        
+        // Check if it's a unique constraint violation (user was created by another request)
+        if (createError.code === '23505') {
+          console.log('User was created by another request, fetching...')
+          const { data: retryUser, error: retryError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('clerk_user_id', clerkUserId)
+            .single()
+          
+          if (retryError) {
+            throw new Error(`Failed to create or fetch user: ${createError.message}`)
+          }
+          
+          return retryUser.id
+        }
+        
+        throw new Error(`Failed to create user: ${createError.message}`)
+      }
+
+      console.log('User created successfully:', newUser.id)
+      return newUser.id
+
+    } catch (error: any) {
+      console.error('Error in ensureUser:', error)
+      throw error
+    }
+  },
+
+  async getSupabaseUserId(clerkUserId: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    try {
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id')
         .eq('clerk_user_id', clerkUserId)
         .single()
       
-      if (userError || !userData) {
-        throw new Error('User not found')
+      if (userError) {
+        console.error('Error fetching user ID:', userError)
+        throw new Error(`User not found in database: ${userError.message}`)
       }
-      userId = userData.id
+
+      if (!userData) {
+        throw new Error('User not found in database')
+      }
+
+      return userData.id
+    } catch (error: any) {
+      console.error('Error in getSupabaseUserId:', error)
+      throw error
     }
+  },
+
+  async syncUserFromClerk(clerkUserId: string, email: string, username?: string, profileImageUrl?: string) {
+    try {
+      return await this.ensureUser(clerkUserId, email, username, profileImageUrl)
+    } catch (error: any) {
+      console.error('Failed to sync user from Clerk:', error)
+      throw new Error(`User synchronization failed: ${error.message}`)
+    }
+  }
+}
+
+// Room-related functions
+export const roomService = {
+  async createRoom(name: string, description?: string, clerkUserId?: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    if (!clerkUserId) {
+      throw new Error('User authentication required')
+    }
+
+    // Ensure user exists and get their Supabase ID
+    const userId = await userService.getSupabaseUserId(clerkUserId)
 
     // Generate room code using the database function
     const { data: codeData, error: codeError } = await supabase.rpc('generate_room_code')
-    if (codeError) throw codeError
+    if (codeError) {
+      console.error('Error generating room code:', codeError)
+      throw new Error('Failed to generate room code')
+    }
 
     const { data: room, error: roomError } = await supabase
       .from('rooms')
@@ -114,7 +237,10 @@ export const roomService = {
       .select()
       .single()
 
-    if (roomError) throw roomError
+    if (roomError) {
+      console.error('Error creating room:', roomError)
+      throw roomError
+    }
 
     // Add creator as owner
     const { error: memberError } = await supabase
@@ -125,7 +251,10 @@ export const roomService = {
         role: 'owner'
       }])
 
-    if (memberError) throw memberError
+    if (memberError) {
+      console.error('Error adding room member:', memberError)
+      throw memberError
+    }
 
     return room
   },
@@ -134,20 +263,12 @@ export const roomService = {
     const supabase = createServerSupabaseClient()
     if (!supabase) throw new Error('Supabase not configured')
 
-    // Get the user ID from Supabase users table
-    let userId = null
-    if (clerkUserId) {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('clerk_user_id', clerkUserId)
-        .single()
-      
-      if (userError || !userData) {
-        throw new Error('User not found')
-      }
-      userId = userData.id
+    if (!clerkUserId) {
+      throw new Error('User authentication required')
     }
+
+    // Ensure user exists and get their Supabase ID
+    const userId = await userService.getSupabaseUserId(clerkUserId)
 
     // Find room by code
     const { data: room, error: roomError } = await supabase
@@ -158,6 +279,18 @@ export const roomService = {
 
     if (roomError || !room) throw new Error('Room not found')
 
+    // Check if user is already a member
+    const { data: existingMember } = await supabase
+      .from('room_members')
+      .select('id')
+      .eq('room_id', room.id)
+      .eq('user_id', userId)
+      .single()
+
+    if (existingMember) {
+      throw new Error('You are already a member of this room')
+    }
+
     // Add user as member
     const { error: memberError } = await supabase
       .from('room_members')
@@ -167,7 +300,10 @@ export const roomService = {
         role: 'member'
       }])
 
-    if (memberError) throw memberError
+    if (memberError) {
+      console.error('Error joining room:', memberError)
+      throw memberError
+    }
 
     return room
   },
@@ -176,36 +312,33 @@ export const roomService = {
     const supabase = createServerSupabaseClient()
     if (!supabase) throw new Error('Supabase not configured')
 
-    // Get the user ID from Supabase users table
-    let userId = null
-    if (clerkUserId) {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('clerk_user_id', clerkUserId)
-        .single()
-      
-      if (userError || !userData) {
-        return []
-      }
-      userId = userData.id
-    }
-
-    const { data, error } = await supabase
-      .from('rooms')
-      .select(`
-        *,
-        room_members!inner(role, joined_at)
-      `)
-      .eq('room_members.user_id', userId)
-      .order('updated_at', { ascending: false })
-
-    if (error) {
-      console.error('Error fetching user rooms:', error)
+    if (!clerkUserId) {
       return []
     }
 
-    return data as RoomWithMembers[]
+    try {
+      // Get the user ID from Supabase users table
+      const userId = await userService.getSupabaseUserId(clerkUserId)
+
+      const { data, error } = await supabase
+        .from('rooms')
+        .select(`
+          *,
+          room_members!inner(role, joined_at)
+        `)
+        .eq('room_members.user_id', userId)
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching user rooms:', error)
+        return []
+      }
+
+      return data as RoomWithMembers[]
+    } catch (error) {
+      console.error('Error in getUserRooms:', error)
+      return []
+    }
   },
 
   async getRoomWithMembers(roomId: string) {
@@ -239,20 +372,12 @@ export const excelService = {
     const supabase = createServerSupabaseClient()
     if (!supabase) throw new Error('Supabase not configured')
 
-    // Get the user ID from Supabase users table
-    let userId = null
-    if (clerkUserId) {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('clerk_user_id', clerkUserId)
-        .single()
-      
-      if (userError || !userData) {
-        throw new Error('User not found')
-      }
-      userId = userData.id
+    if (!clerkUserId) {
+      throw new Error('User authentication required')
     }
+
+    // Ensure user exists and get their Supabase ID
+    const userId = await userService.getSupabaseUserId(clerkUserId)
 
     // Create excel_sheet record
     const { data: sheet, error: sheetError } = await supabase
@@ -268,7 +393,10 @@ export const excelService = {
       .select()
       .single()
 
-    if (sheetError) throw sheetError
+    if (sheetError) {
+      console.error('Error creating excel sheet:', sheetError)
+      throw sheetError
+    }
 
     // Insert data rows in batches
     const batchSize = 1000
@@ -283,7 +411,10 @@ export const excelService = {
         .from('excel_data')
         .insert(batch)
 
-      if (dataError) throw dataError
+      if (dataError) {
+        console.error('Error inserting excel data:', dataError)
+        throw dataError
+      }
     }
 
     return sheet

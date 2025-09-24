@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { currentUser } from '@clerk/nextjs'
-import { roomService } from '@/lib/supabase'
+import { roomService, userService } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +14,19 @@ export async function POST(request: NextRequest) {
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Room name is required' }, { status: 400 })
+    }
+
+    // Ensure user exists in Supabase first
+    try {
+      await userService.ensureUser(
+        user.id,
+        user.emailAddresses[0]?.emailAddress || '',
+        user.username || user.firstName || 'User',
+        user.profileImageUrl
+      )
+    } catch (userError) {
+      console.error('Error ensuring user exists:', userError)
+      return NextResponse.json({ error: 'User sync failed' }, { status: 500 })
     }
 
     const room = await roomService.createRoom(name.trim(), description?.trim(), user.id)
