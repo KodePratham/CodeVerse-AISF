@@ -9,40 +9,45 @@ export default async function DashboardPage() {
     redirect('/sign-in')
   }
 
-  // Save/update user in Supabase
-  const supabase = createServerSupabaseClient()
-  
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('*')
-    .eq('clerk_user_id', user.id)
-    .single()
-
-  if (!existingUser) {
-    // Create new user
-    await supabase
+  // Save/update user in Supabase with error handling
+  try {
+    const supabase = createServerSupabaseClient()
+    
+    const { data: existingUser } = await supabase
       .from('users')
-      .insert([
-        {
-          clerk_user_id: user.id,
+      .select('*')
+      .eq('clerk_user_id', user.id)
+      .single()
+
+    if (!existingUser) {
+      // Create new user
+      await supabase
+        .from('users')
+        .insert([
+          {
+            clerk_user_id: user.id,
+            email: user.emailAddresses[0]?.emailAddress || '',
+            first_name: user.firstName,
+            last_name: user.lastName,
+            profile_image_url: user.profileImageUrl,
+          }
+        ])
+    } else {
+      // Update existing user
+      await supabase
+        .from('users')
+        .update({
           email: user.emailAddresses[0]?.emailAddress || '',
           first_name: user.firstName,
           last_name: user.lastName,
           profile_image_url: user.profileImageUrl,
-        }
-      ])
-  } else {
-    // Update existing user
-    await supabase
-      .from('users')
-      .update({
-        email: user.emailAddresses[0]?.emailAddress || '',
-        first_name: user.firstName,
-        last_name: user.lastName,
-        profile_image_url: user.profileImageUrl,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('clerk_user_id', user.id)
+          updated_at: new Date().toISOString(),
+        })
+        .eq('clerk_user_id', user.id)
+    }
+  } catch (error) {
+    console.error('Error syncing user to Supabase:', error)
+    // Continue rendering the page even if Supabase sync fails
   }
 
   return (
