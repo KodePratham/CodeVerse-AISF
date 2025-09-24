@@ -1,8 +1,9 @@
 import { currentUser } from '@clerk/nextjs'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { roomService, excelService } from '@/lib/supabase'
+import { roomService, excelService, masterWorkflowService } from '@/lib/supabase'
 import ExcelUpload from '@/components/ExcelUpload'
+import MasterWorkflow from '@/components/MasterWorkflow'
 
 export default async function RoomPage({ params }: { params: { id: string } }) {
   const user = await currentUser()
@@ -14,10 +15,20 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
   let room = null
   let error = ''
   let excelSheets = []
+  let masterWorkflows = []
+  let isOwner = false
 
   try {
     room = await roomService.getRoomWithMembers(params.id)
     excelSheets = await excelService.getRoomExcelSheets(params.id)
+    masterWorkflows = await masterWorkflowService.getMasterWorkflows(params.id)
+    
+    // Check if current user is the owner
+    const currentMember = room.room_members?.find(member => 
+      member.users?.clerk_user_id === user.id
+    )
+    isOwner = currentMember?.role === 'owner'
+    
   } catch (err) {
     error = 'Room not found or access denied'
   }
@@ -100,45 +111,54 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
             </div>
 
             {/* Dashboard Section */}
-            <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Excel Data</h2>
-                <ExcelUpload roomId={params.id} />
-              </div>
-              
-              {excelSheets.length > 0 ? (
-                <div className="space-y-4">
-                  {excelSheets.map((sheet: any) => (
-                    <div key={sheet.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-medium text-gray-900">{sheet.file_name}</h3>
-                          <p className="text-sm text-gray-600">Sheet: {sheet.sheet_name}</p>
+            <div className="lg:col-span-2 space-y-6">
+              {/* Master Workflow Section */}
+              <MasterWorkflow 
+                roomId={params.id} 
+                existingWorkflows={masterWorkflows}
+              />
+
+              {/* Excel Data Section */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Excel Data</h2>
+                  <ExcelUpload roomId={params.id} />
+                </div>
+                
+                {excelSheets.length > 0 ? (
+                  <div className="space-y-4">
+                    {excelSheets.map((sheet: any) => (
+                      <div key={sheet.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-medium text-gray-900">{sheet.file_name}</h3>
+                            <p className="text-sm text-gray-600">Sheet: {sheet.sheet_name}</p>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(sheet.upload_date).toLocaleDateString()}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-500">
-                          {new Date(sheet.upload_date).toLocaleDateString()}
-                        </span>
+                        <div className="flex justify-between items-center text-sm text-gray-500">
+                          <span>{sheet.row_count} rows × {sheet.column_count} columns</span>
+                          <span>By: {sheet.users?.username}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center text-sm text-gray-500">
-                        <span>{sheet.row_count} rows × {sheet.column_count} columns</span>
-                        <span>By: {sheet.users?.username}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg">
-                  <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                    ))}
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Excel Files Yet</h3>
-                  <p className="text-gray-500 max-w-sm mx-auto">
-                    Upload Excel files to start consolidating and analyzing your data.
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg">
+                    <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Excel Files Yet</h3>
+                    <p className="text-gray-500 max-w-sm mx-auto">
+                      Upload Excel files to start consolidating and analyzing your data.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -78,6 +78,17 @@ export interface ExcelData {
   created_at: string
 }
 
+export interface MasterWorkflow {
+  id: string
+  room_id: string
+  created_by_user_id: string
+  workflow_name: string
+  consolidated_data: any
+  gemini_analysis: any
+  created_at: string
+  updated_at: string
+}
+
 // Add user service for better user management
 export const userService = {
   async ensureUser(clerkUserId: string, email: string, username?: string, profileImageUrl?: string) {
@@ -457,5 +468,174 @@ export const excelService = {
     }
 
     return data
+  }
+}
+
+// Master Workflow Service
+export const masterWorkflowService = {
+  async createMasterWorkflow(roomId: string, clerkUserId?: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    if (!clerkUserId) {
+      throw new Error('User authentication required')
+    }
+
+    // Ensure user exists and get their Supabase ID
+    const userId = await userService.getSupabaseUserId(clerkUserId)
+
+    // Check if user is a member of the room
+    const { data: roomMember, error: memberError } = await supabase
+      .from('room_members')
+      .select('role')
+      .eq('room_id', roomId)
+      .eq('user_id', userId)
+      .single()
+
+    if (memberError || !roomMember) {
+      throw new Error('You must be a member of this room to create master workflows')
+    }
+
+    // Get all Excel data from the room
+    const { data: allExcelData, error: dataError } = await supabase
+      .from('excel_sheets')
+      .select(`
+        id,
+        file_name,
+        sheet_name,
+        row_count,
+        column_count,
+        excel_data(row_index, data)
+      `)
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: true })
+
+    if (dataError) {
+      console.error('Error fetching Excel data:', dataError)
+      throw new Error('Failed to fetch Excel data')
+    }
+
+    if (!allExcelData || allExcelData.length === 0) {
+      throw new Error('No Excel data found in this room')
+    }
+
+    console.log(`Processing ${allExcelData.length} sheets for consolidation`)
+
+    // Prepare data for analysis
+    const consolidatedData = allExcelData.map(sheet => ({
+      fileName: sheet.file_name,
+      sheetName: sheet.sheet_name,
+      rowCount: sheet.row_count,
+      columnCount: sheet.column_count,
+      data: (sheet.excel_data || [])
+        .sort((a: any, b: any) => a.row_index - b.row_index)
+        .map((row: any) => row.data)
+    }))
+
+    console.log('Consolidated data prepared, calling Gemini analysis...')
+
+    // Call Gemini API for analysis
+    try {
+      const { analyzeExcelData } = await import('./gemini')
+      const geminiAnalysis = await analyzeExcelData(consolidatedData)
+
+      console.log('Gemini analysis completed, saving to database...')
+
+      // Save master workflow to database
+      const { data: masterWorkflow, error: workflowError } = await supabase
+        .from('master_workflows')
+        .insert([{
+          room_id: roomId,
+          created_by_user_id: userId,
+          workflow_name: `Master Workflow - ${new Date().toLocaleDateString()}`,
+          consolidated_data: JSON.stringify(consolidatedData),
+          gemini_analysis: JSON.stringify(geminiAnalysis),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+
+      if (workflowError) {
+        console.error('Error saving master workflow:', workflowError)
+        throw new Error(`Failed to save master workflow: ${workflowError.message}`)
+      }
+
+      console.log('Master workflow saved successfully:', masterWorkflow.id)
+
+      return {
+        ...masterWorkflow,
+        consolidated_data: consolidatedData,
+        gemini_analysis: geminiAnalysis
+      }
+
+    } catch (error: any) {
+      console.error('Error in master workflow creation:', error)
+      throw new Error(`Master workflow creation failed: ${error.message}`)
+    }
+  },
+
+  async getMasterWorkflows(roomId: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    try {
+      const { data, error } = await supabase
+        .from('master_workflows')
+        .select(`
+          *,
+          users(username, profile_image_url)
+        `)
+        .eq('room_id', roomId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching master workflows:', error)
+        return []
+      }
+
+      // Parse JSON strings back to objects
+      return (data || []).map(workflow => ({
+        ...workflow,
+        consolidated_data: typeof workflow.consolidated_data === 'string' 
+          ? JSON.parse(workflow.consolidated_data) 
+          : workflow.consolidated_data,
+        gemini_analysis: typeof workflow.gemini_analysis === 'string' 
+          ? JSON.parse(workflow.gemini_analysis) 
+          : workflow.gemini_analysis
+      }))
+
+    } catch (error) {
+      console.error('Error in getMasterWorkflows:', error)
+      return []
+    }
+  },
+
+  async downloadWorkflow(workflowId: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase
+      .from('master_workflows')
+      .select('*')
+      .eq('id', workflowId)
+      .single()
+
+    if (error || !data) {
+      throw new Error('Master workflow not found')
+    }
+
+    // Parse JSON strings back to objects
+    const workflow = {
+      ...data,
+      consolidated_data: typeof data.consolidated_data === 'string' 
+        ? JSON.parse(data.consolidated_data) 
+        : data.consolidated_data,
+      gemini_analysis: typeof data.gemini_analysis === 'string' 
+        ? JSON.parse(data.gemini_analysis) 
+        : data.gemini_analysis
+    }
+
+    return workflow
   }
 }
