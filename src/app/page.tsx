@@ -1,6 +1,11 @@
 'use client'
 
+import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
+import Link from 'next/link'
+
 export default function HomePage() {
+  const { isSignedIn, user } = useUser()
+
   return (
     <main className="min-h-screen">
       {/* Navbar */}
@@ -12,12 +17,27 @@ export default function HomePage() {
             </div>
             
             <div className="flex items-center space-x-4">
-              <button className="text-gray-700 hover:text-gray-900 font-medium">
-                Sign In
-              </button>
-              <button className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-4 py-2 rounded-full transition-colors">
-                Sign Up
-              </button>
+              {isSignedIn ? (
+                <>
+                  <Link href="/dashboard" className="text-gray-700 hover:text-gray-900 font-medium">
+                    Dashboard
+                  </Link>
+                  <UserButton afterSignOutUrl="/" />
+                </>
+              ) : (
+                <>
+                  <SignInButton mode="modal">
+                    <button className="text-gray-700 hover:text-gray-900 font-medium">
+                      Sign In
+                    </button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <button className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-4 py-2 rounded-full transition-colors">
+                      Sign Up
+                    </button>
+                  </SignUpButton>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -38,9 +58,17 @@ export default function HomePage() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <button className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-8 py-4 rounded-full text-lg transition-all transform hover:scale-105">
-              Get Started
-            </button>
+            {isSignedIn ? (
+              <Link href="/dashboard" className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-8 py-4 rounded-full text-lg transition-all transform hover:scale-105">
+                Go to Dashboard
+              </Link>
+            ) : (
+              <SignUpButton mode="modal">
+                <button className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-8 py-4 rounded-full text-lg transition-all transform hover:scale-105">
+                  Get Started
+                </button>
+              </SignUpButton>
+            )}
             <button className="text-primary-500 hover:text-primary-600 font-medium px-8 py-4 text-lg transition-colors">
               Learn more →
             </button>
@@ -59,12 +87,24 @@ export default function HomePage() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <button className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-10 py-4 rounded-full text-lg transition-all transform hover:scale-105">
-              Start Free Trial
-            </button>
-            <button className="border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-10 py-4 rounded-full text-lg transition-colors">
-              Sign In
-            </button>
+            {isSignedIn ? (
+              <Link href="/dashboard" className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-10 py-4 rounded-full text-lg transition-all transform hover:scale-105">
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <SignUpButton mode="modal">
+                  <button className="bg-primary-500 hover:bg-primary-600 text-white font-medium px-10 py-4 rounded-full text-lg transition-all transform hover:scale-105">
+                    Start Free Trial
+                  </button>
+                </SignUpButton>
+                <SignInButton mode="modal">
+                  <button className="border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-10 py-4 rounded-full text-lg transition-colors">
+                    Sign In
+                  </button>
+                </SignInButton>
+              </>
+            )}
           </div>
         </div>
       </section>
