@@ -21,7 +21,7 @@ export default function JoinRoomPage() {
       const response = await fetch('/api/rooms/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: roomCode.trim() }),
+        body: JSON.stringify({ roomCode: roomCode.trim().toUpperCase() }),
       })
 
       const data = await response.json()
@@ -40,7 +40,7 @@ export default function JoinRoomPage() {
   }
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 6)
+    const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()
     setRoomCode(value)
   }
 
@@ -72,13 +72,13 @@ export default function JoinRoomPage() {
                 id="roomCode"
                 value={roomCode}
                 onChange={handleCodeChange}
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl font-mono tracking-widest"
-                placeholder="000000"
+                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-center text-2xl font-mono tracking-widest uppercase"
+                placeholder="ABC123"
                 maxLength={6}
                 required
               />
               <p className="text-sm text-gray-500 mt-2">
-                Enter the 6-digit room code provided by the room creator.
+                Enter the 6-character room code (letters and numbers) provided by the room creator.
               </p>
             </div>
 

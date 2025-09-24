@@ -274,11 +274,11 @@ export const roomService = {
     // Ensure user exists and get their Supabase ID
     const userId = await userService.getSupabaseUserId(clerkUserId)
 
-    // Find room by code
+    // Find room by code (case insensitive)
     const { data: room, error: roomError } = await supabase
       .from('rooms')
       .select('id')
-      .eq('room_code', roomCode)
+      .eq('room_code', roomCode.toUpperCase())
       .single()
 
     if (roomError || !room) throw new Error('Room not found')

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const { roomCode } = await request.json()
 
     if (!roomCode?.trim() || roomCode.length !== 6) {
-      return NextResponse.json({ error: 'Valid 6-digit room code is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Valid 6-character room code is required' }, { status: 400 })
     }
 
     // Ensure user exists in Supabase first
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User sync failed' }, { status: 500 })
     }
 
-    const room = await roomService.joinRoom(roomCode.trim(), user.id)
+    const room = await roomService.joinRoom(roomCode.trim().toUpperCase(), user.id)
 
     return NextResponse.json({ room }, { status: 200 })
   } catch (error: any) {
