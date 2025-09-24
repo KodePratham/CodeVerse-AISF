@@ -4,14 +4,18 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
-}
+// Don't throw during build - allow graceful degradation
+const isConfigured = supabaseUrl && supabaseAnonKey
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null
 
 // For server-side operations
 export const createServerSupabaseClient = () => {
+  if (!isConfigured) {
+    console.warn('Supabase not configured - environment variables missing')
+    return null
+  }
+  
   if (!supabaseServiceKey) {
     console.warn('SUPABASE_SERVICE_ROLE_KEY is missing, using anon key')
     return createClient(supabaseUrl, supabaseAnonKey)

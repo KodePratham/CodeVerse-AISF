@@ -9,45 +9,52 @@ export default async function DashboardPage() {
     redirect('/sign-in')
   }
 
+  let supabaseStatus = 'Not configured'
+
   // Save/update user in Supabase with error handling
   try {
     const supabase = createServerSupabaseClient()
     
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('*')
-      .eq('clerk_user_id', user.id)
-      .single()
-
-    if (!existingUser) {
-      // Create new user
-      await supabase
+    if (supabase) {
+      const { data: existingUser } = await supabase
         .from('users')
-        .insert([
-          {
-            clerk_user_id: user.id,
+        .select('*')
+        .eq('clerk_user_id', user.id)
+        .single()
+
+      if (!existingUser) {
+        // Create new user
+        await supabase
+          .from('users')
+          .insert([
+            {
+              clerk_user_id: user.id,
+              email: user.emailAddresses[0]?.emailAddress || '',
+              first_name: user.firstName,
+              last_name: user.lastName,
+              profile_image_url: user.profileImageUrl,
+            }
+          ])
+      } else {
+        // Update existing user
+        await supabase
+          .from('users')
+          .update({
             email: user.emailAddresses[0]?.emailAddress || '',
             first_name: user.firstName,
             last_name: user.lastName,
             profile_image_url: user.profileImageUrl,
-          }
-        ])
+            updated_at: new Date().toISOString(),
+          })
+          .eq('clerk_user_id', user.id)
+      }
+      supabaseStatus = 'Connected and synced ✓'
     } else {
-      // Update existing user
-      await supabase
-        .from('users')
-        .update({
-          email: user.emailAddresses[0]?.emailAddress || '',
-          first_name: user.firstName,
-          last_name: user.lastName,
-          profile_image_url: user.profileImageUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('clerk_user_id', user.id)
+      supabaseStatus = 'Not configured (missing environment variables)'
     }
   } catch (error) {
     console.error('Error syncing user to Supabase:', error)
-    // Continue rendering the page even if Supabase sync fails
+    supabaseStatus = 'Error occurred'
   }
 
   return (
@@ -77,7 +84,7 @@ export default async function DashboardPage() {
                 Your automated multi-sheet consolidation and reporting platform is ready to use.
               </p>
               <p className="text-sm text-gray-500">
-                User data synced with Supabase ✓
+                Supabase status: {supabaseStatus}
               </p>
             </div>
           </div>
