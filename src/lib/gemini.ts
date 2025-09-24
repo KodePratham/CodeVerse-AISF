@@ -31,77 +31,55 @@ export async function analyzeExcelData(data: ConsolidatedData[]): Promise<Gemini
     // Create comprehensive data analysis
     const dataAnalysis = analyzeDataStructures(data)
     
-    // Limit data size but include structure analysis
-    const limitedData = data.map(sheet => ({
+    // Prepare all data for Gemini (with reasonable limits)
+    const consolidatedData = data.map(sheet => ({
       fileName: sheet.fileName,
       sheetName: sheet.sheetName,
       rowCount: sheet.rowCount,
       columnCount: sheet.columnCount,
-      sampleData: sheet.data.slice(0, 8), // Sample data for analysis
+      data: sheet.data.slice(0, 100), // Send up to 100 rows per sheet
       headers: sheet.data.length > 0 ? Object.keys(sheet.data[0]) : [],
       dataTypes: analyzeDataTypes(sheet.data.slice(0, 10)),
       commonPatterns: findCommonPatterns(sheet.data.slice(0, 10))
     }))
 
     const prompt = `
-    You are a senior data analyst specializing in business data consolidation. 
-    
-    I have multiple Excel sheets that represent business data that needs to be naturally merged into a single, clean dataset:
+    You are a senior data consolidation expert. Your task is to create a SINGLE UNIFIED TABLE that combines data from multiple Excel sources intelligently.
 
-    SHEETS TO CONSOLIDATE:
-    ${JSON.stringify(limitedData, null, 2)}
+    CRITICAL REQUIREMENT: DO NOT CREATE DUPLICATE ROWS FOR THE SAME ENTITY. Instead, merge all attributes into a single row per unique entity.
 
-    DATA STRUCTURE ANALYSIS:
-    - Common columns across sheets: ${JSON.stringify(dataAnalysis.commonColumns)}
-    - Similar columns (different names, same meaning): ${JSON.stringify(dataAnalysis.similarColumns)}
-    - Unique columns per sheet: ${JSON.stringify(dataAnalysis.uniqueColumns)}
-    - Potential data relationships: ${JSON.stringify(dataAnalysis.relationships)}
+    EXCEL DATA TO PROCESS:
+    ${JSON.stringify(consolidatedData, null, 2)}
 
-    CONSOLIDATION GOALS:
-    1. Create a single, clean business dataset (NO source tracking columns)
-    2. Intelligently merge rows based on business logic (not just append)
-    3. Resolve column name conflicts by choosing the best standard name
-    4. Handle duplicate records by merging or choosing the most complete version
-    5. Create a natural business view that makes sense for reporting
+   You are given JSON data that was created by converting one or more Excel files into a flat table. 
+The table contains rows from multiple different sources, with a "Source File" or similar indicator 
+that shows where each row came from. Because the sources had different column headers, 
+many rows contain irrelevant or empty fields.
 
-    IMPORTANT RULES:
-    - DO NOT include "Source_File", "Source_Sheet", "Original_Row" or any tracking columns
-    - DO merge similar columns into one (e.g., "Customer Name" + "Client Name" = "Customer Name")  
-    - DO remove duplicate records intelligently
-    - DO standardize data formats (dates, numbers, text)
-    - DO create a clean, business-ready dataset
+Your task:
+1. Group the rows by their source (for example, using "Source File" or an equivalent column).
+2. For each group, generate a JSON array that contains only the relevant fields for that source. 
+   - If a column is always empty or irrelevant for that source, drop it.
+   - Keep only the meaningful fields with non-empty values.
+3. Build a clean hierarchical JSON structure with the format:
 
-    Return a JSON response with this structure:
+{
+  "Source1": [
+    { "FieldA": "value", "FieldB": "value", ... },
+    ...
+  ],
+  "Source2": [
+    { "FieldX": "value", "FieldY": "value", ... },
+    ...
+  ]
+}
 
-    {
-      "masterWorkflow": {
-        "consolidationStrategy": "merge|union|lookup|aggregate",
-        "primaryKey": "main_identifier_column",
-        "columnMappings": {
-          "old_column_name": "new_standardized_name"
-        },
-        "deduplicationRules": ["rule1", "rule2"],
-        "businessLogic": "explanation of how data was consolidated"
-      },
-      "summary": "Clear explanation of what was consolidated and how",
-      "insights": [
-        "Business insight about the merged data",
-        "Pattern discovered across sheets",
-        "Data quality observation"
-      ],
-      "recommendations": [
-        "Business recommendation based on the data",
-        "Data improvement suggestion"
-      ],
-      "consolidatedHeaders": ["clean_column_1", "clean_column_2", "clean_column_3"],
-      "mergedData": [
-        // Clean, business-ready merged dataset
-        // NO source tracking columns
-        // Natural business records
-      ]
-    }
-
-    Focus on creating clean, business-ready data that tells a coherent story.
+4. Normalize the data:
+   - Convert date-like values into ISO format (YYYY-MM-DD).
+   - Keep numbers as numbers (not strings).
+   - Remove null/NaN/empty entries.
+   - Trim whitespace from text values.
+5. Ensure the final output is valid JSON only, with no explanations or extra text.
     `
 
     const result = await model.generateContent(prompt)
@@ -324,189 +302,172 @@ function determineConsolidationStrategy(dataAnalysis: any): string {
 function createIntelligentFallbackAnalysis(data: ConsolidatedData[]): GeminiAnalysis {
   const dataAnalysis = analyzeDataStructures(data)
   
-  // Create intelligent column mapping without source tracking
-  const columnMapping = createCleanColumnMapping(data, dataAnalysis)
-  
-  // Apply intelligent merging without metadata columns
-  const mergedData = createCleanMerge(data, columnMapping, dataAnalysis)
+  // Create horizontal merge - ONE ROW PER UNIQUE ENTITY
+  const mergedData = createHorizontalMerge(data)
   
   return {
     masterWorkflow: [{
-      consolidationStrategy: determineConsolidationStrategy(dataAnalysis),
+      consolidationStrategy: 'horizontal_merge',
       primaryKey: findBestPrimaryKey(data),
-      mappingRules: columnMapping,
-      dataTransformations: [
-        "Standardized column names across all sheets",
-        "Merged similar columns with different names", 
-        "Removed duplicate records based on key fields",
-        "Applied consistent data formatting"
-      ]
+      mergeLogic: 'Entities merged horizontally by primary key, expanding columns instead of duplicating rows',
+      columnExpansion: Array.from(new Set(mergedData.flatMap(row => Object.keys(row)))),
+      conflictResolution: 'Most complete value selected for conflicting attributes'
     }],
-    summary: `Successfully consolidated ${data.length} Excel sheets into a unified business dataset. Applied ${determineConsolidationStrategy(dataAnalysis)} strategy to merge ${dataAnalysis.totalColumns} unique columns into ${Object.keys(mergedData[0] || {}).length} standardized fields. Processed ${mergedData.length} unique business records.`,
+    summary: `Successfully consolidated ${data.length} Excel sources using horizontal merge strategy. Created ${mergedData.length} unique entity records with expanded attribute columns instead of duplicate rows. Total columns: ${Object.keys(mergedData[0] || {}).length}`,
     insights: [
-      `Consolidated data from ${data.length} different sources into single view`,
-      `Identified and merged ${Object.keys(dataAnalysis.similarColumns).length} groups of similar columns`,
-      `Applied business logic to resolve ${dataAnalysis.relationships.length} data relationships`,
-      `Final dataset contains ${mergedData.length} clean business records`
+      `Identified ${mergedData.length} unique entities across all sources`,
+      `Expanded to ${Object.keys(mergedData[0] || {}).length} total attributes per entity`,
+      `Eliminated row duplication by merging attributes horizontally`,
+      `Applied intelligent conflict resolution for overlapping attributes`
     ],
     recommendations: [
-      'Establish standard column naming conventions for future data uploads',
-      'Implement data validation to ensure consistent formats across sources',
-      'Consider creating data templates to standardize input formats',
-      'Set up regular data quality checks for ongoing consolidation',
-      'Use unique identifiers consistently across all data sources'
+      'Establish consistent primary key standards across all data sources',
+      'Use the consolidated view for comprehensive entity analysis',
+      'Consider data validation rules to prevent attribute conflicts',
+      'Implement regular data quality checks for entity consistency'
     ],
     consolidatedHeaders: Object.keys(mergedData[0] || {}),
     mergedData
   }
 }
 
-function createCleanColumnMapping(data: ConsolidatedData[], analysis: any): Record<string, string> {
-  const mapping: Record<string, string> = {}
-  const usedStandardNames = new Set<string>()
+function createHorizontalMerge(data: ConsolidatedData[]): any[] {
+  // Step 1: Find the best primary key across all data
+  const primaryKey = detectSmartPrimaryKey(data)
   
-  // First pass: Map similar columns to the same standard name
-  Object.entries(analysis.similarColumns).forEach((entry) => {
-    const [mainCol, similarCols] = entry as [string, string[]];
-    const standardName = createBusinessColumnName(mainCol)
-    
-    // Ensure unique standard names
-    let finalName = standardName
-    let counter = 1
-    while (usedStandardNames.has(finalName)) {
-      finalName = `${standardName} ${counter}`
-      counter++
-    }
-    usedStandardNames.add(finalName)
-    
-    mapping[mainCol] = finalName
-    similarCols.forEach(col => {
-      mapping[col] = finalName
-    })
-  })
+  // Step 2: Create entity map for merging
+  const entityMap = new Map<string, any>()
   
-  // Second pass: Map remaining columns
+  // Step 3: Process each source and merge horizontally
   data.forEach(sheet => {
-    if (sheet.data.length > 0) {
-      Object.keys(sheet.data[0]).forEach(col => {
-        if (!mapping[col]) {
-          const standardName = createBusinessColumnName(col)
-          let finalName = standardName
-          let counter = 1
-          while (usedStandardNames.has(finalName)) {
-            finalName = `${standardName} ${counter}`
-            counter++
-          }
-          usedStandardNames.add(finalName)
-          mapping[col] = finalName
+    sheet.data.forEach(row => {
+      // Clean the row
+      const cleanRow: any = {}
+      Object.entries(row).forEach(([key, value]) => {
+        const normalizedValue = normalizeBusinessValue(value, key)
+        if (normalizedValue !== null && normalizedValue !== '' && normalizedValue !== undefined) {
+          cleanRow[createBusinessColumnName(key)] = normalizedValue
         }
       })
-    }
-  })
-  
-  return mapping
-}
-
-function createBusinessColumnName(columnName: string): string {
-  // Convert to proper business column name
-  let cleaned = columnName
-    .replace(/[_-]/g, ' ')
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  // Common business term mappings
-  const businessMappings: Record<string, string> = {
-    'id': 'ID',
-    'name': 'Name',
-    'email': 'Email',
-    'phone': 'Phone',
-    'address': 'Address',
-    'date': 'Date',
-    'amount': 'Amount',
-    'price': 'Price',
-    'quantity': 'Quantity',
-    'status': 'Status',
-    'type': 'Type',
-    'category': 'Category',
-    'description': 'Description',
-    'total': 'Total',
-    'customer': 'Customer',
-    'client': 'Customer', // Map client to customer
-    'user': 'User',
-    'product': 'Product',
-    'service': 'Service',
-    'order': 'Order',
-    'invoice': 'Invoice',
-    'payment': 'Payment'
-  }
-
-  // Apply business mappings
-  const words = cleaned.split(' ')
-  const mappedWords = words.map(word => {
-    const lowerWord = word.toLowerCase()
-    return businessMappings[lowerWord] || 
-           word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  })
-
-  return mappedWords.join(' ')
-}
-
-function createCleanMerge(data: ConsolidatedData[], columnMapping: Record<string, string>, analysis: any): any[] {
-  const mergedData: any[] = []
-  const recordHashes = new Map<string, any>() // For deduplication
-  
-  // Determine primary key for deduplication
-  const primaryKey = findBestPrimaryKey(data)
-  
-  data.forEach(sheet => {
-    sheet.data.forEach((row, index) => {
-      // Create clean record (no source tracking)
-      const cleanRecord: any = {}
       
-      // Apply column mapping and data normalization
-      Object.entries(row).forEach(([originalCol, value]) => {
-        const mappedCol = columnMapping[originalCol] || createBusinessColumnName(originalCol)
-        cleanRecord[mappedCol] = normalizeBusinessValue(value, originalCol)
-      })
+      if (Object.keys(cleanRow).length === 0) return // Skip empty rows
       
-      // Handle deduplication
-      if (primaryKey && cleanRecord[primaryKey]) {
-        const keyValue = String(cleanRecord[primaryKey])
-        
-        if (recordHashes.has(keyValue)) {
-          // Merge with existing record, keeping most complete data
-          const existing = recordHashes.get(keyValue)
-          const merged = mergeBestRecord(existing, cleanRecord)
-          recordHashes.set(keyValue, merged)
-        } else {
-          recordHashes.set(keyValue, cleanRecord)
-        }
+      // Determine entity identifier
+      let entityId: string
+      if (primaryKey && cleanRow[primaryKey]) {
+        entityId = String(cleanRow[primaryKey])
       } else {
-        // No primary key - just add the record
-        mergedData.push(cleanRecord)
+        // Create composite key from available data
+        entityId = createCompositeKey(cleanRow)
+      }
+      
+      // Merge with existing entity or create new one
+      if (entityMap.has(entityId)) {
+        const existingEntity = entityMap.get(entityId)
+        const mergedEntity = mergeEntityAttributes(existingEntity, cleanRow)
+        entityMap.set(entityId, mergedEntity)
+      } else {
+        entityMap.set(entityId, cleanRow)
       }
     })
   })
   
-  // Add deduplicated records
-  if (primaryKey) {
-    mergedData.push(...Array.from(recordHashes.values()))
-  }
-  
-  return mergedData
+  return Array.from(entityMap.values())
 }
 
-function mergeBestRecord(existing: any, newRecord: any): any {
+function detectSmartPrimaryKey(data: ConsolidatedData[]): string | null {
+  const candidateKeys = new Map<string, { score: number, uniqueness: number }>()
+  
+  data.forEach(sheet => {
+    if (sheet.data.length === 0) return
+    
+    const headers = Object.keys(sheet.data[0])
+    headers.forEach(header => {
+      const normalizedHeader = createBusinessColumnName(header)
+      const lowerHeader = header.toLowerCase()
+      
+      // Score based on naming patterns
+      let score = 0
+      if (lowerHeader.includes('id')) score += 15
+      if (lowerHeader.includes('key')) score += 12
+      if (lowerHeader.includes('code')) score += 10
+      if (lowerHeader.includes('name') && !lowerHeader.includes('filename')) score += 8
+      if (lowerHeader.includes('reference') || lowerHeader.includes('ref')) score += 7
+      if (lowerHeader.includes('number')) score += 5
+      
+      // Calculate uniqueness
+      const values = sheet.data.map(row => row[header]).filter(v => v !== null && v !== undefined && v !== '')
+      const uniqueValues = new Set(values)
+      const uniqueness = values.length > 0 ? uniqueValues.size / values.length : 0
+      
+      // Update candidate
+      const existing = candidateKeys.get(normalizedHeader) || { score: 0, uniqueness: 0 }
+      candidateKeys.set(normalizedHeader, {
+        score: Math.max(existing.score, score),
+        uniqueness: Math.max(existing.uniqueness, uniqueness)
+      })
+    })
+  })
+  
+  // Find best primary key
+  let bestKey = null
+  let bestScore = 0
+  
+  candidateKeys.forEach(({ score, uniqueness }, key) => {
+    const totalScore = score + (uniqueness * 20) // Weight uniqueness heavily
+    if (totalScore > bestScore && uniqueness > 0.7) { // Require good uniqueness
+      bestScore = totalScore
+      bestKey = key
+    }
+  })
+  
+  return bestKey
+}
+
+function createCompositeKey(row: any): string {
+  // Create a composite key from the most identifying fields
+  const identifyingFields: string[] = []
+  
+  // Priority order for composite key
+  const fieldPriority = ['Name', 'ID', 'Code', 'Title', 'Email', 'Phone']
+  
+  fieldPriority.forEach(field => {
+    if (row[field] !== undefined && row[field] !== null && row[field] !== '') {
+      identifyingFields.push(String(row[field]))
+    }
+  })
+  
+  // If no priority fields, use first non-null values
+  if (identifyingFields.length === 0) {
+    Object.entries(row).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '' && identifyingFields.length < 3) {
+        identifyingFields.push(String(value))
+      }
+    })
+  }
+  
+  return identifyingFields.join('|') || `entity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
+
+function mergeEntityAttributes(existing: any, newRow: any): any {
   const merged = { ...existing }
   
-  // For each field, choose the most complete/recent value
-  Object.entries(newRecord).forEach(([key, value]) => {
+  // Merge all attributes from newRow into existing
+  Object.entries(newRow).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== '') {
-      // If existing value is empty or new value is more complete
-      if (!merged[key] || merged[key] === '' || 
-          (typeof value === 'string' && value.length > String(merged[key] || '').length)) {
+      if (merged[key] === undefined || merged[key] === null || merged[key] === '') {
+        // Add new attribute
         merged[key] = value
+      } else if (merged[key] !== value) {
+        // Handle conflict - choose more complete value
+        if (typeof value === 'string' && typeof merged[key] === 'string') {
+          if (value.length > merged[key].length) {
+            merged[key] = value
+          }
+        } else if (typeof value === 'number' && !isNaN(value)) {
+          merged[key] = value // Prefer numbers over strings when possible
+        }
+        // For other conflicts, keep existing value (first-wins strategy)
       }
     }
   })
@@ -514,48 +475,33 @@ function mergeBestRecord(existing: any, newRecord: any): any {
   return merged
 }
 
-function normalizeBusinessValue(value: any, columnName: string): any {
-  if (value === null || value === undefined || value === '') {
-    return null
+function validateAndEnhanceAnalysis(analysis: any, data: ConsolidatedData[], dataAnalysis: any): GeminiAnalysis {
+  const enhanced: GeminiAnalysis = {
+    masterWorkflow: Array.isArray(analysis.masterWorkflow) ? analysis.masterWorkflow : [analysis.masterWorkflow || {}],
+    summary: analysis.summary || 'Horizontal merge consolidation completed',
+    insights: Array.isArray(analysis.insights) ? analysis.insights : [],
+    recommendations: Array.isArray(analysis.recommendations) ? analysis.recommendations : [],
+    consolidatedHeaders: Array.isArray(analysis.consolidatedHeaders) ? analysis.consolidatedHeaders : [],
+    mergedData: Array.isArray(analysis.mergedData) && analysis.mergedData.length > 0 
+      ? analysis.mergedData 
+      : createHorizontalMerge(data)
   }
   
-  const colLower = columnName.toLowerCase()
+  // Ensure we have proper data structure
+  if (!enhanced.mergedData || enhanced.mergedData.length === 0) {
+    enhanced.mergedData = createHorizontalMerge(data)
+  }
   
-  // Normalize dates to standard format
-  if (colLower.includes('date') || colLower.includes('time') || colLower.includes('created') || colLower.includes('updated')) {
-    const date = new Date(value)
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0] // YYYY-MM-DD format
+  // Update headers if they're missing
+  if (!enhanced.consolidatedHeaders || enhanced.consolidatedHeaders.length === 0) {
+    if (enhanced.mergedData.length > 0) {
+      enhanced.consolidatedHeaders = Object.keys(enhanced.mergedData[0])
     }
-    return value
   }
   
-  // Normalize currency/amounts
-  if (colLower.includes('amount') || colLower.includes('price') || colLower.includes('cost') || colLower.includes('total')) {
-    const numStr = String(value).replace(/[$,\s]/g, '')
-    const num = parseFloat(numStr)
-    if (!isNaN(num)) {
-      return num
-    }
-    return value
-  }
-  
-  // Normalize quantities
-  if (colLower.includes('quantity') || colLower.includes('qty') || colLower.includes('count')) {
-    const num = parseInt(String(value))
-    if (!isNaN(num)) {
-      return num
-    }
-    return value
-  }
-  
-  // Normalize text fields
-  if (typeof value === 'string') {
-    return value.trim()
-  }
-  
-  return value
+  return enhanced
 }
+
 
 function analyzeDataTypes(data: any[]): Record<string, string> {
   if (data.length === 0) return {}
@@ -641,40 +587,84 @@ function findDataRelationship(sheet1: ConsolidatedData, sheet2: ConsolidatedData
   return null
 }
 
-function validateAndEnhanceAnalysis(analysis: any, data: ConsolidatedData[], dataAnalysis: any): GeminiAnalysis {
-  const enhanced: GeminiAnalysis = {
-    masterWorkflow: Array.isArray(analysis.masterWorkflow) ? analysis.masterWorkflow : [analysis.masterWorkflow || {}],
-    summary: analysis.summary || 'Business data consolidation completed',
-    insights: Array.isArray(analysis.insights) ? analysis.insights : [],
-    recommendations: Array.isArray(analysis.recommendations) ? analysis.recommendations : [],
-    consolidatedHeaders: Array.isArray(analysis.consolidatedHeaders) ? analysis.consolidatedHeaders : [],
-    mergedData: Array.isArray(analysis.mergedData) && analysis.mergedData.length > 0 
-      ? analysis.mergedData 
-      : createCleanMerge(data, createCleanColumnMapping(data, dataAnalysis), dataAnalysis)
-  }
+
+function createFallbackMergedData(data: ConsolidatedData[]): any[] {
+  const mergedData: any[] = []
   
-  // Ensure merged data doesn't have source tracking columns
-  if (enhanced.mergedData.length > 0) {
-    enhanced.mergedData = enhanced.mergedData.map(record => {
-      const cleaned = { ...record }
-      delete cleaned['Source File']
-      delete cleaned['Source_File'] 
-      delete cleaned['Source Sheet']
-      delete cleaned['Source_Sheet']
-      delete cleaned['Original Row']
-      delete cleaned['Original_Row']
-      delete cleaned['Data Quality Score']
-      delete cleaned['Duplicate Flag']
-      return cleaned
-    })
+  data.forEach(sheet => {
+    const sourceKey = `${sheet.fileName}_${sheet.sheetName}`.replace(/[^a-zA-Z0-9_]/g, '_')
     
-    // Update headers to match cleaned data
-    if (enhanced.mergedData.length > 0) {
-      enhanced.consolidatedHeaders = Object.keys(enhanced.mergedData[0])
-    }
+    sheet.data.forEach(row => {
+      const cleanRow: any = { Source: sourceKey }
+      let hasValidData = false
+      
+      Object.entries(row).forEach(([key, value]) => {
+        const normalizedValue = normalizeBusinessValue(value, key)
+        if (normalizedValue !== null && normalizedValue !== '' && normalizedValue !== undefined) {
+          cleanRow[createBusinessColumnName(key)] = normalizedValue
+          hasValidData = true
+        }
+      })
+      
+      if (hasValidData) {
+        mergedData.push(cleanRow)
+      }
+    })
+  })
+  
+  return mergedData
+}
+
+function normalizeBusinessValue(value: any, columnName: string): any {
+  // Handle null, undefined, or empty values
+  if (value === null || value === undefined || value === '') {
+    return null
   }
   
-  return enhanced
+  const colLower = columnName.toLowerCase()
+  
+  // Normalize dates to standard format
+  if (colLower.includes('date') || colLower.includes('time') || colLower.includes('created') || colLower.includes('updated')) {
+    const date = new Date(value)
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0] // YYYY-MM-DD format
+    }
+    return value
+  }
+  
+  // Normalize currency/amounts
+  if (colLower.includes('amount') || colLower.includes('price') || colLower.includes('cost') || colLower.includes('total')) {
+    const numStr = String(value).replace(/[$,\s]/g, '')
+    const num = parseFloat(numStr)
+    if (!isNaN(num)) {
+      return num
+    }
+    return value
+  }
+  
+  // Normalize quantities
+  if (colLower.includes('quantity') || colLower.includes('qty') || colLower.includes('count')) {
+    const num = parseInt(String(value))
+    if (!isNaN(num)) {
+      return num
+    }
+    return value
+  }
+  
+  // Normalize text fields
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  
+  return value
+}
+
+function createBusinessColumnName(columnName: string): string {
+  return columnName
+    .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim()
+    .replace(/\b\w/g, l => l.toUpperCase()) // Title case
 }
 
 export function createExcelBuffer(data: any[], headers: string[]): Buffer {
