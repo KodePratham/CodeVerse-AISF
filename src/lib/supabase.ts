@@ -29,8 +29,7 @@ export interface User {
   id: string
   clerk_user_id: string
   email: string
-  first_name: string | null
-  last_name: string | null
+  username: string | null
   profile_image_url: string | null
   created_at: string
   updated_at: string
