@@ -26,7 +26,7 @@ export async function analyzeExcelData(data: ConsolidatedData[]): Promise<Gemini
       return createSimpleFallback(data)
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `
 You are a data consolidation expert. Merge multiple Excel sheets into ONE efficient table with minimum rows and columns but covering ALL data.
