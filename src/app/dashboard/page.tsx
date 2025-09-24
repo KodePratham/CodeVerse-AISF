@@ -30,8 +30,7 @@ export default async function DashboardPage() {
             {
               clerk_user_id: user.id,
               email: user.emailAddresses[0]?.emailAddress || '',
-              first_name: user.firstName,
-              last_name: user.lastName,
+              username: user.username || user.firstName || 'User',
               profile_image_url: user.profileImageUrl,
             }
           ])
@@ -41,8 +40,7 @@ export default async function DashboardPage() {
           .from('users')
           .update({
             email: user.emailAddresses[0]?.emailAddress || '',
-            first_name: user.firstName,
-            last_name: user.lastName,
+            username: user.username || user.firstName || 'User',
             profile_image_url: user.profileImageUrl,
             updated_at: new Date().toISOString(),
           })
@@ -66,7 +64,7 @@ export default async function DashboardPage() {
               <h1 className="text-2xl font-semibold text-gray-900">Colony Dashboard</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user.firstName}!</span>
+              <span className="text-gray-700">Welcome, {user.username || user.firstName || 'User'}!</span>
               <UserButton afterSignOutUrl="/" />
             </div>
           </div>
@@ -93,3 +91,4 @@ export default async function DashboardPage() {
     </div>
   )
 }
+  
