@@ -2,7 +2,8 @@ import { UserButton, currentUser } from '@clerk/nextjs'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { roomService } from '@/lib/supabase'
+import { roomService, userService } from '@/lib/supabase'
+import SyncErrorAlert from '@/components/SyncErrorAlert'
 
 export default async function DashboardPage() {
   const user = await currentUser()
@@ -12,64 +13,47 @@ export default async function DashboardPage() {
   }
 
   let supabaseStatus = 'Not configured'
-  let userRooms: {
-    id: string;
-    name: string;
-    description: string | null;
-    room_code: string;
-    room_members: Array<{ role: string }>;
-  }[] = []
+  let userRooms: any[] = []
+  let syncError = null
 
   // Save/update user in Supabase with error handling
   try {
     const supabase = createServerSupabaseClient()
     
     if (supabase) {
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('*')
-        .eq('clerk_user_id', user.id)
-        .single()
-
-      if (!existingUser) {
-        // Create new user
-        await supabase
-          .from('users')
-          .insert([
-            {
-              clerk_user_id: user.id,
-              email: user.emailAddresses[0]?.emailAddress || '',
-              username: user.username || user.firstName || 'User',
-              profile_image_url: user.profileImageUrl,
-            }
-          ])
-      } else {
-        // Update existing user
-        await supabase
-          .from('users')
-          .update({
-            email: user.emailAddresses[0]?.emailAddress || '',
-            username: user.username || user.firstName || 'User',
-            profile_image_url: user.profileImageUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('clerk_user_id', user.id)
-      }
-      
-      // Get user's rooms
+      // Ensure user exists in Supabase with detailed error handling
       try {
-        userRooms = await roomService.getUserRooms(user.id)
-      } catch (error) {
-        console.error('Error fetching rooms:', error)
+        const supabaseUserId = await userService.ensureUser(
+          user.id,
+          user.emailAddresses[0]?.emailAddress || '',
+          user.username || user.firstName || 'User',
+          user.profileImageUrl
+        )
+        
+        console.log('User synced successfully:', supabaseUserId)
+        supabaseStatus = 'Connected and synced ✓'
+        
+        // Get user's rooms
+        try {
+          userRooms = await roomService.getUserRooms(user.id)
+          console.log('Fetched rooms for user:', user.id, 'Count:', userRooms.length)
+        } catch (roomError) {
+          console.error('Error fetching rooms:', roomError)
+          // Don't fail the entire page for room errors
+        }
+        
+      } catch (userSyncError: any) {
+        console.error('User sync error:', userSyncError)
+        syncError = userSyncError.message
+        supabaseStatus = `User sync failed: ${userSyncError.message}`
       }
       
-      supabaseStatus = 'Connected and synced ✓'
     } else {
       supabaseStatus = 'Not configured (missing environment variables)'
     }
-  } catch (error) {
-    console.error('Error syncing user to Supabase:', error)
-    supabaseStatus = 'Error occurred'
+  } catch (error: any) {
+    console.error('Error connecting to Supabase:', error)
+    supabaseStatus = `Connection error: ${error.message}`
   }
 
   return (
@@ -92,6 +76,11 @@ export default async function DashboardPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Sync Error Alert */}
+          {syncError && (
+            <SyncErrorAlert syncError={syncError} />
+          )}
+
           {/* Room Management Section */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Rooms</h2>
@@ -152,6 +141,12 @@ export default async function DashboardPage() {
             <p className="text-sm text-gray-500">
               Supabase status: {supabaseStatus}
             </p>
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-2 text-xs text-gray-400">
+                <p>Clerk User ID: {user.id}</p>
+                <p>Email: {user.emailAddresses[0]?.emailAddress}</p>
+              </div>
+            )}
           </div>
         </div>
       </main>
