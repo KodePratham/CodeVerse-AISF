@@ -57,6 +57,27 @@ export interface RoomWithMembers extends Room {
   room_members: (RoomMember & { users: User })[]
 }
 
+export interface ExcelSheet {
+  id: string
+  room_id: string
+  uploaded_by_user_id: string
+  file_name: string
+  sheet_name: string
+  upload_date: string
+  row_count: number
+  column_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ExcelData {
+  id: string
+  sheet_id: string
+  row_index: number
+  data: any
+  created_at: string
+}
+
 // Room-related functions
 export const roomService = {
   async createRoom(name: string, description?: string, clerkUserId?: string) {
@@ -209,5 +230,101 @@ export const roomService = {
     }
     
     return data as RoomWithMembers
+  }
+}
+
+// Excel-related functions
+export const excelService = {
+  async saveExcelData(roomId: string, fileName: string, sheetName: string, data: any[], clerkUserId?: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    // Get the user ID from Supabase users table
+    let userId = null
+    if (clerkUserId) {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('clerk_user_id', clerkUserId)
+        .single()
+      
+      if (userError || !userData) {
+        throw new Error('User not found')
+      }
+      userId = userData.id
+    }
+
+    // Create excel_sheet record
+    const { data: sheet, error: sheetError } = await supabase
+      .from('excel_sheets')
+      .insert([{
+        room_id: roomId,
+        uploaded_by_user_id: userId,
+        file_name: fileName,
+        sheet_name: sheetName,
+        row_count: data.length,
+        column_count: data.length > 0 ? Object.keys(data[0]).length : 0
+      }])
+      .select()
+      .single()
+
+    if (sheetError) throw sheetError
+
+    // Insert data rows in batches
+    const batchSize = 1000
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize).map((row, index) => ({
+        sheet_id: sheet.id,
+        row_index: i + index,
+        data: row
+      }))
+
+      const { error: dataError } = await supabase
+        .from('excel_data')
+        .insert(batch)
+
+      if (dataError) throw dataError
+    }
+
+    return sheet
+  },
+
+  async getRoomExcelSheets(roomId: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase
+      .from('excel_sheets')
+      .select(`
+        *,
+        users(username, profile_image_url)
+      `)
+      .eq('room_id', roomId)
+      .order('upload_date', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching excel sheets:', error)
+      return []
+    }
+
+    return data
+  },
+
+  async getExcelSheetData(sheetId: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase
+      .from('excel_data')
+      .select('*')
+      .eq('sheet_id', sheetId)
+      .order('row_index', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching excel data:', error)
+      throw error
+    }
+
+    return data
   }
 }
