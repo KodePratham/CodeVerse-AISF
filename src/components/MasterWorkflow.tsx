@@ -79,6 +79,23 @@ export default function MasterWorkflow({ roomId, existingWorkflows }: MasterWork
     }
   }
 
+  const handleDelete = async (workflowId: string) => {
+    if (!confirm('Are you sure you want to delete this master workflow?')) return
+    try {
+      const response = await fetch(`/api/master-workflow/${workflowId}`, { method: 'DELETE' })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete workflow')
+      }
+      setSuccess('Master workflow deleted successfully!')
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
+    } catch (error: any) {
+      setError(error.message || 'Failed to delete workflow')
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex justify-between items-center mb-6">
@@ -146,15 +163,23 @@ export default function MasterWorkflow({ roomId, existingWorkflows }: MasterWork
                     By: {workflow.users?.username || 'Unknown User'}
                   </p>
                 </div>
-                <button
-                  onClick={() => handleDownload(workflow.id, workflow.workflow_name)}
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Download Excel</span>
-                </button>
+                <div className="flex flex-col items-end space-y-2">
+                  <button
+                    onClick={() => handleDownload(workflow.id, workflow.workflow_name)}
+                    className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Download Excel</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(workflow.id)}
+                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
               
               {workflow.gemini_analysis && (

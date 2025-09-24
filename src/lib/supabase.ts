@@ -444,6 +444,46 @@ export const excelService = {
     }
 
     return data.sheet_data || []
+  },
+
+  async deleteExcelSheet(sheetId: string, clerkUserId?: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+    if (!clerkUserId) throw new Error('User authentication required')
+
+    // Ensure user is uploader or room admin/owner
+    // Fetch sheet and room membership
+    const { data: sheet, error: sheetError } = await supabase
+      .from('excel_sheets')
+      .select('uploaded_by_user_id, room_id')
+      .eq('id', sheetId)
+      .single()
+    if (sheetError || !sheet) throw new Error('Excel sheet not found')
+
+    const userId = await userService.getSupabaseUserId(clerkUserId)
+    if (sheet.uploaded_by_user_id !== userId) {
+      // Check if user is admin/owner in the room
+      const { data: member, error: memberError } = await supabase
+        .from('room_members')
+        .select('role')
+        .eq('room_id', sheet.room_id)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (
+        memberError ||
+        !member ||
+        (member.role !== 'owner' && member.role !== 'admin')
+      ) {
+        throw new Error('You do not have permission to delete this file')
+      }
+    }
+
+    const { error: deleteError } = await supabase
+      .from('excel_sheets')
+      .delete()
+      .eq('id', sheetId)
+    if (deleteError) throw new Error('Failed to delete Excel sheet')
+    return true
   }
 }
 
@@ -611,5 +651,44 @@ export const masterWorkflowService = {
     }
 
     return workflow
+  },
+
+  async deleteMasterWorkflow(workflowId: string, clerkUserId?: string) {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+    if (!clerkUserId) throw new Error('User authentication required')
+
+    // Fetch workflow and room membership
+    const { data: workflow, error: workflowError } = await supabase
+      .from('master_workflows')
+      .select('created_by_user_id, room_id')
+      .eq('id', workflowId)
+      .single()
+    if (workflowError || !workflow) throw new Error('Workflow not found')
+
+    const userId = await userService.getSupabaseUserId(clerkUserId)
+    if (workflow.created_by_user_id !== userId) {
+      // Check if user is admin/owner in the room
+      const { data: member, error: memberError } = await supabase
+        .from('room_members')
+        .select('role')
+        .eq('room_id', workflow.room_id)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (
+        memberError ||
+        !member ||
+        (member.role !== 'owner' && member.role !== 'admin')
+      ) {
+        throw new Error('You do not have permission to delete this workflow')
+      }
+    }
+
+    const { error: deleteError } = await supabase
+      .from('master_workflows')
+      .delete()
+      .eq('id', workflowId)
+    if (deleteError) throw new Error('Failed to delete workflow')
+    return true
   }
 }
