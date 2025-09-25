@@ -76,6 +76,41 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* How It Works + App Screenshot Section */}
+      <section className="bg-white py-12 px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-center gap-12">
+        {/* How it works (left) */}
+        <div className="max-w-xl w-full md:w-1/2 mb-8 md:mb-0">
+          <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-6 text-left">
+            How Colony Works
+          </h2>
+          <ol className="space-y-5 text-left list-decimal list-inside text-lg text-gray-700">
+            <li>
+              <span className="font-medium text-primary-600">Upload</span> your Excel or CSV files from multiple sources.
+            </li>
+            <li>
+              <span className="font-medium text-primary-600">Consolidate</span> all sheets automatically into a unified master report.
+            </li>
+            <li>
+              <span className="font-medium text-primary-600">Analyze</span> with built-in AI for instant summaries and insights.
+            </li>
+            <li>
+              <span className="font-medium text-primary-600">Share</span> and distribute reports to stakeholders in one click.
+            </li>
+            <li>
+              <span className="font-medium text-primary-600">Automate</span> repetitive reporting and eliminate manual errors.
+            </li>
+          </ol>
+        </div>
+        {/* Screenshot (right) */}
+        <div className="flex justify-center md:w-1/2 w-full">
+          <img
+            src="/landing.png"
+            alt="App Screenshot"
+            className="rounded-2xl shadow-xl border border-gray-200 max-w-full w-[90vw] md:w-[32rem] object-contain"
+          />
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="bg-gray-50 py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
@@ -123,7 +158,7 @@ export default function HomePage() {
             </div>
             
             <p className="text-gray-500 text-sm">
-              © 2024 Colony. All rights reserved.
+              © 2025 Colony. All rights reserved.
             </p>
           </div>
         </div>
