@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await currentUser()
@@ -16,7 +16,7 @@ export async function POST(
     if (!question || typeof question !== 'string') {
       return NextResponse.json({ error: 'No question provided' }, { status: 400 })
     }
-    const workflowId = params.workflowId
+    const workflowId = context.params.workflowId
     if (!workflowId) {
       return NextResponse.json({ error: 'Missing workflowId param' }, { status: 400 })
     }
