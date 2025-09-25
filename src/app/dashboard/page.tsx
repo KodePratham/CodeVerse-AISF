@@ -1,9 +1,10 @@
-import { UserButton, currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { roomService, userService } from '@/lib/supabase'
 import SyncErrorAlert from '@/components/SyncErrorAlert'
+import UserNav from '@/components/UserNav'
 
 export default async function DashboardPage() {
   const user = await currentUser()
@@ -27,7 +28,7 @@ export default async function DashboardPage() {
           user.id,
           user.emailAddresses[0]?.emailAddress || '',
           user.username || user.firstName || 'User',
-          user.profileImageUrl
+          user.imageUrl
         )
         
         console.log('User synced successfully:', supabaseUserId)
@@ -66,10 +67,8 @@ export default async function DashboardPage() {
                 Colony Dashboard
               </Link>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user.username || user.firstName || 'User'}!</span>
-              <UserButton afterSignOutUrl="/" />
-            </div>
+            {/* Replace the old UserButton and greeting with the new UserNav */}
+            <UserNav />
           </div>
         </div>
       </nav>
