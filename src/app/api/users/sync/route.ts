@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { userService } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       user.id,
       user.emailAddresses[0]?.emailAddress || '',
       user.username || user.firstName || 'User',
-      user.profileImageUrl
+      user.imageUrl
     )
 
     return NextResponse.json({ 

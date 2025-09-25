@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { masterWorkflowService } from '@/lib/supabase'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { roomId: string } }
+  context: { params: { roomId: string } }
 ) {
   try {
     const user = await currentUser()
@@ -14,7 +14,7 @@ export async function POST(
     }
 
     const masterWorkflow = await masterWorkflowService.createMasterWorkflow(
-      params.roomId,
+      context.params.roomId,
       user.id
     )
 
@@ -39,7 +39,7 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { roomId: string } }
+  context: { params: { roomId: string } }
 ) {
   try {
     const user = await currentUser()
@@ -48,7 +48,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const masterWorkflows = await masterWorkflowService.getMasterWorkflows(params.roomId)
+    const masterWorkflows = await masterWorkflowService.getMasterWorkflows(context.params.roomId)
 
     return NextResponse.json({ masterWorkflows }, { status: 200 })
 
@@ -59,4 +59,3 @@ export async function GET(
     }, { status: 500 })
   }
 }
-     

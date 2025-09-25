@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import * as XLSX from 'xlsx'
 import { excelService, userService } from '@/lib/supabase'
 
@@ -20,7 +20,7 @@ export async function POST(
         user.id,
         user.emailAddresses[0]?.emailAddress || '',
         user.username || user.firstName || 'User',
-        user.profileImageUrl
+        user.imageUrl
       )
     } catch (userError: any) {
       console.error('Error ensuring user exists during upload:', userError)

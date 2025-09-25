@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { masterWorkflowService } from '@/lib/supabase'
 import { createExcelBuffer } from '@/lib/gemini'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await currentUser()
@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const workflow = await masterWorkflowService.downloadWorkflow(params.workflowId)
+    const workflow = await masterWorkflowService.downloadWorkflow(context.params.workflowId)
     
     if (!workflow.gemini_analysis?.mergedData || !workflow.gemini_analysis?.consolidatedHeaders) {
       return NextResponse.json({ error: 'Workflow data is incomplete' }, { status: 400 })

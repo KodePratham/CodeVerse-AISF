@@ -1,4 +1,4 @@
-import { currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { roomService, excelService, masterWorkflowService } from '@/lib/supabase'
@@ -134,4 +134,3 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
     </div>
   )
 }
-              

@@ -31,6 +31,7 @@ export interface User {
   email: string
   username: string | null
   profile_image_url: string | null
+  subscription_tier: string | null // <-- add this if not present
   created_at: string
   updated_at: string
 }
@@ -207,7 +208,45 @@ export const userService = {
       console.error('Failed to sync user from Clerk:', error)
       throw new Error(`User synchronization failed: ${error.message}`)
     }
+  },
+
+  async getSubscriptionTier(clerkUserId: string): Promise<string | null> {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+    const { data, error } = await supabase
+      .from('users')
+      .select('subscription_tier')
+      .eq('clerk_user_id', clerkUserId)
+      .single()
+    if (error) {
+      console.error('Error fetching subscription tier:', error)
+      return null
+    }
+    return data?.subscription_tier || null
+  },
+
+  async setSubscriptionTier(clerkUserId: string, tier: 'free_user' | 'pro_user') {
+    const supabase = createServerSupabaseClient()
+    if (!supabase) throw new Error('Supabase not configured')
+    const { error } = await supabase
+      .from('users')
+      .update({
+        subscription_tier: tier,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('clerk_user_id', clerkUserId)
+    if (error) {
+      console.error('Error updating subscription tier:', error)
+      throw new Error('Failed to update subscription tier')
+    }
+    return true
   }
+}
+
+// Optionally, add a mapping helper if you want to map Clerk plan keys to your DB values
+export function mapClerkPlanToTier(plan: string): 'free_user' | 'pro_user' {
+  if (plan === 'pro_user') return 'pro_user'
+  return 'free_user'
 }
 
 // Room-related functions

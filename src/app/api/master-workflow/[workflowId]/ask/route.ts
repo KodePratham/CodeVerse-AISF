@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { currentUser } from '@clerk/nextjs'
+import { currentUser } from '@clerk/nextjs/server'
 import { masterWorkflowService } from '@/lib/supabase'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await currentUser()
@@ -16,7 +16,7 @@ export async function POST(
     if (!question || typeof question !== 'string') {
       return NextResponse.json({ error: 'No question provided' }, { status: 400 })
     }
-    const workflow = await masterWorkflowService.downloadWorkflow(params.workflowId)
+    const workflow = await masterWorkflowService.downloadWorkflow(context.params.workflowId)
     if (!workflow || !workflow.gemini_analysis) {
       return NextResponse.json({ error: 'Workflow not found or no analysis' }, { status: 404 })
     }
