@@ -1,8 +1,65 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import MasterWorkflowChart from './MasterWorkflowChart'
+
+function ReportChat({ workflowId }: { workflowId: string }) {
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSend = async () => {
+    if (!input.trim()) return
+    setMessages(msgs => [...msgs, { role: 'user', content: input }])
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/master-workflow/${workflowId}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: input }),
+      })
+      const data = await res.json()
+      setMessages(msgs => [...msgs, { role: 'assistant', content: data.answer || data.error || 'No answer.' }])
+    } catch (e: any) {
+      setMessages(msgs => [...msgs, { role: 'assistant', content: 'Error: ' + (e.message || 'Unknown error') }])
+    }
+    setInput('')
+    setLoading(false)
+  }
+
+  return (
+    <div className="border rounded-lg p-4 mt-4 bg-gray-50">
+      <div className="mb-2 font-semibold text-gray-700">Ask questions about this report:</div>
+      <div className="max-h-48 overflow-y-auto mb-2 space-y-2">
+        {messages.map((msg, i) => (
+          <div key={i} className={msg.role === 'user' ? 'text-right' : 'text-left'}>
+            <span className={msg.role === 'user' ? 'bg-blue-100 text-blue-800 px-2 py-1 rounded' : 'bg-gray-200 text-gray-800 px-2 py-1 rounded'}>
+              {msg.content}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          className="flex-1 border rounded px-2 py-1"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
+          placeholder="Type your question..."
+          disabled={loading}
+        />
+        <button
+          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-1 rounded disabled:bg-gray-400"
+          onClick={handleSend}
+          disabled={loading || !input.trim()}
+        >
+          {loading ? '...' : 'Ask'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 interface MasterWorkflowProps {
   roomId: string
@@ -13,6 +70,7 @@ export default function MasterWorkflow({ roomId, existingWorkflows }: MasterWork
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [openChatId, setOpenChatId] = useState<string | null>(null)
   const router = useRouter()
 
   const handleCreateMasterWorkflow = async () => {
@@ -200,6 +258,15 @@ export default function MasterWorkflow({ roomId, existingWorkflows }: MasterWork
                   )}
                   {/* Chart visualization */}
                   <MasterWorkflowChart geminiAnalysis={workflow.gemini_analysis} />
+                  <button
+                    className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm"
+                    onClick={() => setOpenChatId(openChatId === workflow.id ? null : workflow.id)}
+                  >
+                    {openChatId === workflow.id ? 'Close Chat' : 'Chat with Report'}
+                  </button>
+                  {openChatId === workflow.id && (
+                    <ReportChat workflowId={workflow.id} />
+                  )}
                 </div>
               )}
             </div>
