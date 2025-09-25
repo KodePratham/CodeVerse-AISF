@@ -8,6 +8,7 @@ function ReportChat({ workflowId }: { workflowId: string }) {
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [excelLoading, setExcelLoading] = useState(false)
 
   const handleSend = async () => {
     if (!input.trim()) return
@@ -26,6 +27,37 @@ function ReportChat({ workflowId }: { workflowId: string }) {
     }
     setInput('')
     setLoading(false)
+  }
+
+  const handleExcelRequest = async () => {
+    const instructions = prompt('Describe how you want to generate the new Excel file (e.g., "Only rows where Status is Complete", "Summarize by Department", etc.):')
+    if (!instructions) return
+    setExcelLoading(true)
+    try {
+      const res = await fetch(`/api/master-workflow/${workflowId}/generate-excel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instructions }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || 'Failed to generate Excel file')
+        setExcelLoading(false)
+        return
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `custom_report_${Date.now()}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (e: any) {
+      alert(e.message || 'Failed to generate Excel file')
+    }
+    setExcelLoading(false)
   }
 
   return (
@@ -55,6 +87,15 @@ function ReportChat({ workflowId }: { workflowId: string }) {
           disabled={loading || !input.trim()}
         >
           {loading ? '...' : 'Ask'}
+        </button>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <button
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded disabled:bg-gray-400"
+          onClick={handleExcelRequest}
+          disabled={excelLoading}
+        >
+          {excelLoading ? 'Generating...' : 'Generate New Excel from Report'}
         </button>
       </div>
     </div>
