@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import MasterWorkflowChart from './MasterWorkflowChart'
 
 interface MasterWorkflowProps {
   roomId: string
@@ -197,6 +198,8 @@ export default function MasterWorkflow({ roomId, existingWorkflows }: MasterWork
                       </ul>
                     </div>
                   )}
+                  {/* Chart visualization */}
+                  <MasterWorkflowChart geminiAnalysis={workflow.gemini_analysis} />
                 </div>
               )}
             </div>
