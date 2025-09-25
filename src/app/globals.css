@@ -7,20 +7,83 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background: #fafbfc;
   }
   
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
     line-height: 1.6;
+    background: #fafbfc;
+    color: #222;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-6 rounded-full transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg;
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-5 rounded transition-all duration-200;
+    box-shadow: none;
+    border-radius: 6px;
   }
-  
   .btn-secondary {
-    @apply bg-white border border-gray-300 hover:border-orange-500 hover:text-orange-500 font-medium py-3 px-6 rounded-full transition-all duration-300;
+    @apply bg-white border border-gray-300 hover:border-primary-400 hover:text-primary-500 font-medium py-2 px-5 rounded transition-all duration-200;
+    box-shadow: none;
+    border-radius: 6px;
   }
+  .btn-danger {
+    @apply bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-5 rounded transition-all duration-200;
+    box-shadow: none;
+    border-radius: 6px;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-primary-500 hover:text-primary-600 font-medium py-2 px-5 rounded transition-all duration-200;
+    box-shadow: none;
+    border-radius: 6px;
+  }
+}
+
+/* Minimal card style */
+.card-minimal {
+  @apply bg-white border border-gray-200 rounded p-4;
+  box-shadow: none;
+  border-radius: 10px;
+}
+
+/* Minimal popup/modal style */
+.popup-minimal {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 2rem 1.5rem;
+  max-width: 95vw;
+  width: 350px;
+  box-shadow: 0 2px 16px 0 rgba(0,0,0,0.07);
+  z-index: 1000;
+}
+.popup-minimal-title {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+  color: #222;
+}
+.popup-minimal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  justify-content: flex-end;
+}
+.popup-minimal input,
+.popup-minimal textarea {
+  @apply border border-gray-300 rounded px-2 py-1 w-full;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  background: #fafbfc;
+}
+
+/* Remove box-shadows and reduce border-radius for all cards and buttons */
+.bg-white,
+.rounded-lg,
+.rounded-md,
+.rounded {
+  border-radius: 10px !important;
+  box-shadow: none !important;
 }
