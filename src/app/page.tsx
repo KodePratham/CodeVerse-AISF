@@ -69,9 +69,9 @@ export default function HomePage() {
                 </button>
               </SignUpButton>
             )}
-            <button className="text-primary-500 hover:text-primary-600 font-medium px-8 py-4 text-lg transition-colors">
+            <Link href="/pricing" className="text-primary-500 hover:text-primary-600 font-medium px-8 py-4 text-lg transition-colors">
               Learn more →
-            </button>
+            </Link>
           </div>
         </div>
       </section>

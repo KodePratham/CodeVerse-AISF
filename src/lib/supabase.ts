@@ -31,6 +31,9 @@ export interface User {
   email: string
   username: string | null
   profile_image_url: string | null
+  subscription_tier: 'free' | 'pro'
+  storage_used_mb: number
+  storage_limit_mb: number
   created_at: string
   updated_at: string
 }
