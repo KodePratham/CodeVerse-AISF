@@ -5,9 +5,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workflowId: string } }
+  { params }: { params: Promise<{ workflowId: string }> }
 ) {
-  const { workflowId } = params
+  const { workflowId } = await params
   try {
     const user = await currentUser()
     if (!user) {
